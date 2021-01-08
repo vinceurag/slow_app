@@ -34,9 +34,28 @@ defmodule SlowApp do
   """
   @spec get_weather_for_all_cities(cities :: [String.t()]) :: [result()]
   def get_weather_for_all_cities(cities) do
+    caller_pid = self()
+
     cities
     |> Enum.map(fn city ->
-      Weather.get_weather(city)
+      spawn(fn ->
+        send(caller_pid, Weather.get_weather(city))
+      end)
     end)
+
+    result_collector([], Enum.count(cities))
+  end
+
+  defp result_collector(results, expected_results_count) do
+    receive do
+      :stop ->
+        results
+
+      result ->
+        results = [result | results]
+
+        if Enum.count(results) == expected_results_count, do: send(self(), :stop)
+        result_collector(results, expected_results_count)
+    end
   end
 end
